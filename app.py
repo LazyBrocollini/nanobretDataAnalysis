@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from parsing import parse_workbook, ParsedPlate, GridBlock
-from calc import build_tidy, build_prism_table, single_point_controls
+from calc import build_tidy, build_prism_table, single_point_controls, build_background_samples
 from export import table_tsv, table_csv, workbook_bytes
 
 st.set_page_config(page_title="NanoBRET to Prism", layout="wide")
@@ -162,6 +162,7 @@ if not all_results:
     st.stop()
 
 combined = pd.concat([x.tidy for x in all_results], ignore_index=True)
+background_samples = build_background_samples(all_results, background_mode)
 # Background is calculated independently per file, as each plate is an independent experiment.
 background_values = [x.background for x in all_results if x.background is not None]
 warnings = [w for x in all_results for w in x.warnings]
@@ -230,8 +231,13 @@ with tidy_tab:
     edited = st.data_editor(editable, use_container_width=True, hide_index=True, key="tidy_editor", column_config={"include": st.column_config.CheckboxColumn("Include")})
     st.session_state.editable_tidy = edited
 with download_tab:
+    st.subheader("Background samples used")
+    if background_samples.empty:
+        st.caption("No background subtraction was applied; the BackgroundSamples sheet contains headers only.")
+    else:
+        st.dataframe(background_samples, use_container_width=True, hide_index=True)
     st.subheader("Downloads")
     for name, table in [("Prism_DoseResponse_mBU", prism_mbu), ("Prism_Donor_RLU", prism_donor), ("Prism_Acceptor_RLU", prism_acceptor)]:
         st.download_button(f"Download {name}.csv", table_csv(table), file_name=f"{name}{download_suffix}.csv", mime="text/csv", key=f"dl_{name}")
-    combined_xlsx = workbook_bytes({"Prism_DoseResponse_mBU": prism_mbu, "Prism_Donor_RLU": prism_donor, "Prism_Acceptor_RLU": prism_acceptor, "SingleControls": controls, "Tidy_data": editable})
+    combined_xlsx = workbook_bytes({"Prism_DoseResponse_mBU": prism_mbu, "Prism_Donor_RLU": prism_donor, "Prism_Acceptor_RLU": prism_acceptor, "SingleControls": controls, "BackgroundSamples": background_samples, "Tidy_data": editable})
     st.download_button("Download combined Excel workbook", combined_xlsx, file_name=f"NanoBRET_to_Prism{download_suffix}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
