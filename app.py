@@ -74,7 +74,15 @@ def filename_suffix(files: list) -> str:
         return f"_{stem}" if stem else ""
     return "_combined"
 
-download_suffix = filename_suffix(uploads)
+source_suffix = filename_suffix(uploads)
+custom_suffix_input = st.sidebar.text_input(
+    "Custom download suffix (optional)",
+    value="",
+    help="Appended after the original workbook suffix, for example Day1 or replicate_A.",
+)
+custom_suffix_clean = re.sub(r"[^A-Za-z0-9._-]+", "_", custom_suffix_input).strip("._-")
+custom_suffix = f"_{custom_suffix_clean}" if custom_suffix_clean else ""
+download_suffix = source_suffix + custom_suffix
 
 try:
     first_plate = cached_parse(uploads[0].getvalue())
