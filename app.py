@@ -55,11 +55,11 @@ def combine_files(uploaded: list) -> tuple[pd.DataFrame, list, list[str]]:
 st.title("NanoBRET to Prism")
 st.caption("Local-only preparation of NanoBRET plate-reader output for GraphPad Prism. Curve fitting remains in Prism.")
 
-if st.sidebar.button("Refresh / reset app", help="Clear cached parsing and reset edited Include values."):
-    st.cache_data.clear()
-    st.session_state.pop("editable_tidy", None)
-    st.rerun()
-st.sidebar.caption("Refresh clears cached workbook parsing and resets the editable table.")
+recalculate_clicked = st.sidebar.button("Recalculate", type="primary", help="Recalculate background correction and all outputs using the current settings.")
+if recalculate_clicked:
+    # Force the calculation-state synchronization below while preserving Include edits.
+    st.session_state.pop("tidy_calc_signature", None)
+st.sidebar.caption("Use Recalculate after selecting manual background wells. Include edits are preserved.")
 
 uploads = st.sidebar.file_uploader("NanoBRET workbook(s)", type=["xlsx"], accept_multiple_files=True)
 if not uploads:
@@ -101,7 +101,10 @@ st.sidebar.subheader("Calculation settings")
 background_mode = st.sidebar.radio("Background", ["auto-detect", "manual", "none"], index=0)
 manual_wells: list[str] = []
 if background_mode == "manual":
-    manual_wells = st.sidebar.multiselect("Background wells", [f"{r}{c}" for r in "ABCDEFGH" for c in range(1, 25)], default=[])
+    manual_rows = first_plate.sample_blocks[0].row_labels if first_plate.sample_blocks else list("ABCDEFGH")
+    manual_width = first_plate.sample_blocks[0].width if first_plate.sample_blocks else 12
+    manual_options = [f"{r}{c}" for r in manual_rows for c in range(1, manual_width + 1)]
+    manual_wells = st.sidebar.multiselect("Background wells", manual_options, default=[])
 vehicle_text = st.sidebar.text_input("Vehicle names (comma-separated)", "water, vehicle, DMSO, buffer, PBS")
 vehicle_names = [x.strip() for x in vehicle_text.split(",") if x.strip()]
 zero_handling = st.sidebar.radio("Zero handling", ["Replace 0 with pseudo-concentration", "Keep 0 as 0", "Drop 0 nM row"], index=0)
@@ -135,9 +138,17 @@ if background_values:
     })
     st.info("Background correction: mBU_corrected = mBU - the mean donor-only background.\n\n" + "; ".join(f"{row.source_file}: {row.background_mBU:.3f} mBU from {row.background_wells}" for row in bg_summary.itertuples()))
 
-# Editable include state is held in session state and reapplied on reruns.
-if "editable_tidy" not in st.session_state or set(st.session_state.editable_tidy.get("well", [])) != set(combined.well):
+# Synchronize recalculated values when settings change, while preserving manual Include edits.
+file_signature = tuple((file.name, hashlib.sha1(file.getvalue()).hexdigest()) for file in uploads)
+calc_signature = (file_signature, mapping_ids_base, background_mode, tuple(sorted(manual_wells)), float(threshold))
+previous_signature = st.session_state.get("tidy_calc_signature")
+if previous_signature != calc_signature or "editable_tidy" not in st.session_state:
+    previous = st.session_state.get("editable_tidy")
+    if previous is not None and "well" in previous and "include" in previous:
+        include_by_well = previous.set_index("well")["include"].to_dict()
+        combined["include"] = combined["well"].map(include_by_well).fillna(combined["include"]).astype(bool)
     st.session_state.editable_tidy = combined.copy()
+    st.session_state.tidy_calc_signature = calc_signature
 editable = st.session_state.editable_tidy.copy()
 
 # Build outputs reactively from edited Include values.
