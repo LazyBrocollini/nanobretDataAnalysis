@@ -55,6 +55,12 @@ def combine_files(uploaded: list) -> tuple[pd.DataFrame, list, list[str]]:
 st.title("NanoBRET to Prism")
 st.caption("Local-only preparation of NanoBRET plate-reader output for GraphPad Prism. Curve fitting remains in Prism.")
 
+if st.sidebar.button("Refresh / reset app", help="Clear cached parsing and reset edited Include values."):
+    st.cache_data.clear()
+    st.session_state.pop("editable_tidy", None)
+    st.rerun()
+st.sidebar.caption("Refresh clears cached workbook parsing and resets the editable table.")
+
 uploads = st.sidebar.file_uploader("NanoBRET workbook(s)", type=["xlsx"], accept_multiple_files=True)
 if not uploads:
     st.info("Upload one or more Promega GloMax NanoBRET .xlsx workbooks to begin.")
@@ -122,7 +128,12 @@ warnings = [w for x in all_results for w in x.warnings]
 for warning in dict.fromkeys(warnings):
     st.warning(warning)
 if background_values:
-    st.caption("Background mBU by file: " + ", ".join(f"{v:.3f}" for v in background_values))
+    bg_summary = pd.DataFrame({
+        "source_file": [file.name for file in uploads],
+        "background_wells": [", ".join(result.background_wells) for result in all_results],
+        "background_mBU": [result.background if result.background is not None else np.nan for result in all_results],
+    })
+    st.info("Background correction: mBU_corrected = mBU - the mean donor-only background.\n\n" + "; ".join(f"{row.source_file}: {row.background_mBU:.3f} mBU from {row.background_wells}" for row in bg_summary.itertuples()))
 
 # Editable include state is held in session state and reapplied on reruns.
 if "editable_tidy" not in st.session_state or set(st.session_state.editable_tidy.get("well", [])) != set(combined.well):
@@ -140,6 +151,11 @@ if pseudo is not None and zero_handling.startswith("Replace"):
     st.info(f"Zero handling: replaced 0 nM with pseudo-concentration {pseudo:.6g} nM (geometric-mean dilution step {step:.6g}).")
 else:
     st.info(f"Zero handling: {zero_handling}.")
+negative_included = editable.loc[editable["include"] & editable["mBU_corrected"].lt(0)]
+if negative_included.empty:
+    st.success("Background check: no included wells have negative corrected mBU.")
+else:
+    st.warning(f"Background check: {len(negative_included)} included wells have negative corrected mBU; review the background selection or Include flags.")
 
 plate_tab, prism_tab, tidy_tab, download_tab = st.tabs(["Plate view and QC", "Prism tables", "Tidy data", "Downloads"])
 with plate_tab:
