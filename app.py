@@ -2,6 +2,7 @@
 from __future__ import annotations
 from io import BytesIO
 import hashlib
+import re
 
 import numpy as np
 import pandas as pd
@@ -65,6 +66,15 @@ uploads = st.sidebar.file_uploader("NanoBRET workbook(s)", type=["xlsx"], accept
 if not uploads:
     st.info("Upload one or more Promega GloMax NanoBRET .xlsx workbooks to begin.")
     st.stop()
+
+def filename_suffix(files: list) -> str:
+    """Create a filesystem-safe suffix from the uploaded workbook name(s)."""
+    if len(files) == 1:
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "_", files[0].name.rsplit(".", 1)[0]).strip("._-")
+        return f"_{stem}" if stem else ""
+    return "_combined"
+
+download_suffix = filename_suffix(uploads)
 
 try:
     first_plate = cached_parse(uploads[0].getvalue())
@@ -195,6 +205,6 @@ with tidy_tab:
 with download_tab:
     st.subheader("Downloads")
     for name, table in [("Prism_DoseResponse_mBU", prism_mbu), ("Prism_Donor_RLU", prism_donor), ("Prism_Acceptor_RLU", prism_acceptor)]:
-        st.download_button(f"Download {name}.csv", table_csv(table), file_name=f"{name}.csv", mime="text/csv", key=f"dl_{name}")
+        st.download_button(f"Download {name}.csv", table_csv(table), file_name=f"{name}{download_suffix}.csv", mime="text/csv", key=f"dl_{name}")
     combined_xlsx = workbook_bytes({"Prism_DoseResponse_mBU": prism_mbu, "Prism_Donor_RLU": prism_donor, "Prism_Acceptor_RLU": prism_acceptor, "SingleControls": controls, "Tidy_data": editable})
-    st.download_button("Download combined Excel workbook", combined_xlsx, file_name="NanoBRET_to_Prism.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button("Download combined Excel workbook", combined_xlsx, file_name=f"NanoBRET_to_Prism{download_suffix}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
