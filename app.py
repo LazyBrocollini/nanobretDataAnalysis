@@ -53,6 +53,24 @@ def combine_files(uploaded: list) -> tuple[pd.DataFrame, list, list[str]]:
         results.append((file, data, plate))
     return pd.DataFrame(), results, []
 
+def label_single_controls(table: pd.DataFrame) -> pd.DataFrame:
+    """Use descriptive headers for the exported SingleControls summary."""
+    return table.rename(columns={
+        "series": "Series",
+        "conc_nM": "Concentration (nM)",
+        "n": "n",
+        "mBU_corrected_mean": "Corrected mBU - mean",
+        "mBU_corrected_SD": "Corrected mBU - SD",
+        "mBU_corrected_%CV": "Corrected mBU - %CV",
+        "donor_RLU_mean": "Donor RLU - mean",
+        "donor_RLU_SD": "Donor RLU - SD",
+        "donor_RLU_%CV": "Donor RLU - %CV",
+        "acceptor_RLU_mean": "Acceptor RLU - mean",
+        "acceptor_RLU_SD": "Acceptor RLU - SD",
+        "acceptor_RLU_%CV": "Acceptor RLU - %CV",
+    })
+
+
 st.title("NanoBRET to Prism")
 st.caption("Local-only preparation of NanoBRET plate-reader output for GraphPad Prism. Curve fitting remains in Prism.")
 
@@ -78,11 +96,12 @@ source_suffix = filename_suffix(uploads)
 custom_suffix_input = st.sidebar.text_input(
     "Custom download suffix (optional)",
     value="",
-    help="Appended after the original workbook suffix, for example Day1 or replicate_A.",
+    help="Replaces the original workbook suffix, for example Day1 or replicate_A.",
 )
 custom_suffix_clean = re.sub(r"[^A-Za-z0-9._-]+", "_", custom_suffix_input).strip("._-")
 custom_suffix = f"_{custom_suffix_clean}" if custom_suffix_clean else ""
-download_suffix = source_suffix + custom_suffix
+# An entered custom suffix replaces the workbook-derived suffix.
+download_suffix = custom_suffix or source_suffix
 
 try:
     first_plate = cached_parse(uploads[0].getvalue())
@@ -174,7 +193,7 @@ value_col = "mBU_corrected" if use_corrected else "mBU"
 prism_mbu, pseudo, step = build_prism_table(editable, value_col, vehicle_names, group_by, zero_handling, add_log10)
 prism_donor, _, _ = build_prism_table(editable, "donor_RLU", vehicle_names, group_by, zero_handling, add_log10)
 prism_acceptor, _, _ = build_prism_table(editable, "acceptor_RLU", vehicle_names, group_by, zero_handling, add_log10)
-controls = single_point_controls(editable, vehicle_names, group_by)
+controls = label_single_controls(single_point_controls(editable, vehicle_names, group_by))
 
 if pseudo is not None and zero_handling.startswith("Replace"):
     st.info(f"Zero handling: replaced 0 nM with pseudo-concentration {pseudo:.6g} nM (geometric-mean dilution step {step:.6g}).")
