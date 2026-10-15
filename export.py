@@ -15,12 +15,15 @@ def table_csv(table: pd.DataFrame) -> bytes:
 
 
 def workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
-    """Create a clean, unmerged Excel workbook with plain values."""
+    """Export summary/tidy headers, retaining Prism tables' embedded header rows."""
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         for name, table in tables.items():
             safe = name[:31]
-            table.to_excel(writer, sheet_name=safe, index=False, header=False, na_rep="")
+            # Prism tables already contain their header row as data. Summary
+            # and tidy tables need their DataFrame column names written.
+            write_headers = name in {"SingleControls", "Tidy_data"}
+            table.to_excel(writer, sheet_name=safe, index=False, header=write_headers, na_rep="")
             ws = writer.sheets[safe]
             ws.freeze_panes(1, 0)
             ws.set_column(0, max(0, len(table.columns) - 1), 14)
