@@ -22,7 +22,7 @@ def workbook_bytes(tables: dict[str, pd.DataFrame]) -> bytes:
             safe = name[:31]
             # Prism tables already contain their header row as data. Summary
             # and tidy tables need their DataFrame column names written.
-            write_headers = name in {"SingleControls", "Tidy_data"}
+            write_headers = name in {"SingleControls", "BackgroundSamples", "Tidy_data"}
             table.to_excel(writer, sheet_name=safe, index=False, header=write_headers, na_rep="")
             ws = writer.sheets[safe]
             ws.freeze_panes(1, 0)
