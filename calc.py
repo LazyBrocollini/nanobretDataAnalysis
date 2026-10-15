@@ -242,3 +242,38 @@ def single_point_controls(
                     "donor_RLU_mean": m2, "donor_RLU_SD": s2, "donor_RLU_%CV": c2,
                     "acceptor_RLU_mean": m3, "acceptor_RLU_SD": s3, "acceptor_RLU_%CV": c3})
     return pd.DataFrame(out)
+
+
+def build_background_samples(
+    results: Iterable[CalculationResult], background_mode: str
+) -> pd.DataFrame:
+    """Audit the finite-mBU wells actually used for each applied background."""
+    labels = {
+        "source_file": "Source file", "well": "Well", "mRNA": "mRNA",
+        "labelled_guide": "Labelled guide", "competitor": "Competitor",
+        "conc_nM": "Concentration (nM)", "donor_RLU": "Donor RLU",
+        "acceptor_RLU": "Acceptor RLU", "BRET": "BRET", "mBU": "mBU",
+    }
+    columns = list(labels.values()) + [
+        "Background mode", "Mean background applied (mBU)",
+        "Background sample count", "Corrected mBU",
+    ]
+    frames: list[pd.DataFrame] = []
+    for result in results:
+        if result.background is None or background_mode == "none":
+            continue
+        # Include controls even if excluded from curves. The background selection,
+        # not the curve Include checkbox, determines subtraction.
+        used = result.tidy.loc[
+            result.tidy["well"].isin(result.background_wells)
+            & result.tidy["mBU"].notna()
+        ].copy()
+        if used.empty:
+            continue
+        audit = used[list(labels)].rename(columns=labels)
+        audit["Background mode"] = background_mode
+        audit["Mean background applied (mBU)"] = result.background
+        audit["Background sample count"] = len(used)
+        audit["Corrected mBU"] = used["mBU_corrected"].to_numpy()
+        frames.append(audit)
+    return pd.concat(frames, ignore_index=True)[columns] if frames else pd.DataFrame(columns=columns)
