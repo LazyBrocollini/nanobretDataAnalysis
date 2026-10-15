@@ -20,11 +20,13 @@ def cached_parse(data: bytes) -> ParsedPlate:
 @st.cache_data(show_spinner=False)
 def cached_tidy(data: bytes, source_file: str, mapping_ids: tuple, background_mode: str, manual_wells: tuple, threshold: float) -> object:
     plate = cached_parse(data)
-    blocks = {f"sample_{i}": b for i, b in enumerate(plate.sample_blocks)}
-    result_blocks = {f"result_{i}": b for i, b in enumerate(plate.result_blocks)}
+    # The UI stores selected grid positions as integers; index the detected
+    # block lists directly rather than looking them up by string keys.
+    sample_blocks = plate.sample_blocks
+    result_blocks = plate.result_blocks
     mapping = {
-        "mrna": blocks[mapping_ids[0]], "labelled_guide": blocks[mapping_ids[1]],
-        "competitor": blocks[mapping_ids[2]], "conc_nM": blocks[mapping_ids[3]],
+        "mrna": sample_blocks[mapping_ids[0]], "labelled_guide": sample_blocks[mapping_ids[1]],
+        "competitor": sample_blocks[mapping_ids[2]], "conc_nM": sample_blocks[mapping_ids[3]],
         "donor": result_blocks[mapping_ids[4]], "acceptor": result_blocks[mapping_ids[5]],
     }
     if mapping_ids[6] != -1:
